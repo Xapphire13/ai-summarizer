@@ -100,6 +100,7 @@ impl Handler {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(debug_assertions)]
     dotenvy::dotenv()?;
 
     let ollama_client = Ollama::new(
