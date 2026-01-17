@@ -42,35 +42,13 @@ MESSAGE_LENGTH_MAX=2000
 
 ## Building
 
-Build the release binary for your local machine:
+Build the release binary:
 
 ```bash
 cargo build --release
 ```
 
 The compiled binary will be at `target/release/summarizer-bot`.
-
-### Cross-compiling for Raspberry Pi
-
-To build for a Raspberry Pi from macOS or another host, install
-[Podman](https://podman.io/) and [cross](https://github.com/cross-rs/cross):
-
-```bash
-brew install podman
-cargo install cross --git https://github.com/cross-rs/cross
-```
-
-Then build for your target architecture:
-
-```bash
-# Raspberry Pi 3/4/5 (64-bit)
-cross build --release --target aarch64-unknown-linux-gnu
-
-# Raspberry Pi 2/3 (32-bit)
-cross build --release --target armv7-unknown-linux-gnueabihf
-```
-
-The compiled binary will be at `target/<target>/release/summarizer-bot`.
 
 ## Deployment
 
