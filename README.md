@@ -57,7 +57,7 @@ To build for a Raspberry Pi from macOS or another host, install
 
 ```bash
 brew install podman
-cargo install cross
+cargo install cross --git https://github.com/cross-rs/cross
 ```
 
 Then build for your target architecture:
