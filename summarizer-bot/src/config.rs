@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Result<Self> {
         let config = Self {
-            bot: BotConfig::load()?,
+            bot: shared::load_bot_config!()?,
             llm_model: env::var("LLM_MODEL").context("Expected LLM_MODEL in environment")?,
             llm_host: env::var("LLM_HOST").context("Expected LLM_HOST in environment")?,
             llm_port: env::var("LLM_PORT")

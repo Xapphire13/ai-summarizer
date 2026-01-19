@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use tracing_subscriber::{
     EnvFilter, fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt,
 };
@@ -26,4 +27,12 @@ pub fn init(package_name: &str) -> Result<()> {
     };
 
     Ok(())
+}
+
+/// Initialize tracing using the calling crate's package name.
+#[macro_export]
+macro_rules! init_tracing {
+    () => {
+        $crate::tracing::init(env!("CARGO_PKG_NAME"))
+    };
 }

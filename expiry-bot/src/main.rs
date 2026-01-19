@@ -1,13 +1,12 @@
-use ::tracing::{error, info};
+use ::tracing::error;
 use anyhow::{Context, Result};
 use serenity::{Client, all::GatewayIntents};
-use shared::{config::BotConfig, tracing};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing::init(env!("CARGO_PKG_NAME"))?;
+    shared::init_tracing!()?;
 
-    let config = BotConfig::load()?;
+    let config = shared::load_bot_config!()?;
 
     let intents = GatewayIntents::empty();
 

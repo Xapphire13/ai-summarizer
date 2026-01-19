@@ -1,7 +1,6 @@
 use ::tracing::error;
 use anyhow::{Context, Result};
 use serenity::prelude::*;
-use shared::tracing;
 
 use crate::config::Config;
 use crate::handler::Handler;
@@ -13,8 +12,7 @@ mod llm;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing::init(env!("CARGO_PKG_NAME"))?;
-
+    shared::init_tracing!()?;
     let config = Config::from_env()?;
 
     let intents = GatewayIntents::GUILD_MESSAGES
