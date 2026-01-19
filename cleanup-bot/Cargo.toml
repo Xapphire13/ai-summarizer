@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.100"
+poise = "0.6.1"
 serenity = "0.12.5"
 shared = { version = "0.1.0", path = "../shared" }
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
