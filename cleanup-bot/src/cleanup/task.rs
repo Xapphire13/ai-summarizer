@@ -214,11 +214,11 @@ async fn delete_messages(
         .context("can't compute bulk delete cutoff")?
         .into();
     let (mut bulk_jobs, mut individual_jobs): (Vec<_>, Vec<_>) = jobs
-        .into_iter()
+        .iter()
         .partition(|j| j.message_id.created_at() <= bulk_delete_cutoff);
 
     if bulk_jobs.len() < BULK_DELETE_MIN {
-        individual_jobs.extend(bulk_jobs.drain(..));
+        individual_jobs.append(&mut bulk_jobs);
     }
 
     if !bulk_jobs.is_empty() {

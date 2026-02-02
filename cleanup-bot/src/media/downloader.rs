@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -64,7 +64,7 @@ impl MediaDownloader {
     /// Download an attachment.
     async fn download_attachment(
         &self,
-        dir: &PathBuf,
+        dir: &Path,
         message_id: MessageId,
         attachment: &MediaAttachment,
     ) -> Result<DownloadResult> {
