@@ -1,15 +1,19 @@
+use std::{collections::HashMap, fs, path::PathBuf};
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serenity::all::ChannelId;
-use std::{collections::HashMap, fs};
 
-const CONFIG_PATH: &'static str = "./config.toml";
+const CONFIG_PATH: &str = "./config.toml";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelConfig {
     pub name: String,
     /// Override for the global retention policy
     pub policy_days: Option<u32>,
+    /// Pagination cursor: oldest message ID seen, next run fetches BEFORE this
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pagination_cursor: Option<u64>,
 }
 
 impl ChannelConfig {
@@ -21,12 +25,28 @@ impl ChannelConfig {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RetentionConfig {
-    default_policy_days: u32,
+    pub default_policy_days: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MediaBackupConfig {
+    pub download_dir: PathBuf,
+}
+
+impl Default for MediaBackupConfig {
+    fn default() -> Self {
+        Self {
+            download_dir: PathBuf::from("./media_backups"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
-    retention: RetentionConfig,
+    pub schedule_interal_seconds: u32,
+    pub retention: RetentionConfig,
+    #[serde(default)]
+    pub media_backup: MediaBackupConfig,
     #[serde(default)]
     channels: HashMap<ChannelId, ChannelConfig>,
 }
@@ -53,12 +73,52 @@ impl Config {
         channel_id: ChannelId,
         config: ChannelConfig,
     ) -> Result<()> {
+        // Check if policy is becoming stricter (fewer days) - if so, clear pagination cursor
+        if let Some(existing) = self.channels.get(&channel_id) {
+            let old_days = existing.resolve_policy_days(self);
+            let new_days = config
+                .policy_days
+                .unwrap_or(self.retention.default_policy_days);
+            if new_days < old_days {
+                // Policy is stricter, start fresh from newest messages
+                let mut config = config;
+                config.pagination_cursor = None;
+                self.channels.insert(channel_id, config);
+                return self.save();
+            }
+        }
         self.channels.insert(channel_id, config);
         self.save()
+    }
+
+    pub fn get_pagination_cursor(&self, channel_id: ChannelId) -> Option<u64> {
+        self.channels
+            .get(&channel_id)
+            .and_then(|c| c.pagination_cursor)
+    }
+
+    pub fn set_pagination_cursor(
+        &mut self,
+        channel_id: ChannelId,
+        cursor: Option<u64>,
+    ) -> Result<()> {
+        if let Some(config) = self.channels.get_mut(&channel_id) {
+            config.pagination_cursor = cursor;
+            self.save()?;
+        }
+        Ok(())
     }
 
     pub fn remove_channel(&mut self, channel_id: ChannelId) -> Result<()> {
         self.channels.remove(&channel_id);
         self.save()
+    }
+
+    /// Returns a list of all enabled channels with their resolved retention policies.
+    pub fn enabled_channels(&self) -> Vec<(ChannelId, u32)> {
+        self.channels
+            .iter()
+            .map(|(id, config)| (*id, config.resolve_policy_days(self)))
+            .collect()
     }
 }

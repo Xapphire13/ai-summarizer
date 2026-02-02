@@ -11,6 +11,9 @@ poise = "0.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serenity = "0.12.5"
 shared = { version = "0.1.0", path = "../shared" }
-tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "time", "sync", "fs"] }
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+reqwest = { version = "0.12", features = ["stream"] }
 toml = "0.9.11"
 tracing = "0.1.44"
