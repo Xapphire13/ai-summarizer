@@ -5,9 +5,8 @@ use anyhow::{Error, Result};
 use indoc::formatdoc;
 use serenity::all::Mentionable;
 
-use crate::cancellation_registry::CancellationRegistry;
-use crate::config::ChannelConfig;
-use crate::config_store::ConfigStore;
+use crate::cancellation::CancellationRegistry;
+use crate::config::{ChannelConfig, ConfigStore};
 
 pub struct CommandData {
     pub config: ConfigStore,

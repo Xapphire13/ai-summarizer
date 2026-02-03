@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use serenity::all::{Message, MessageId};
 
-use crate::extensions::{AttachmentsExt, MediaAttachment};
+use crate::media::{AttachmentsExt, MediaAttachment};
 
 /// A message that should be deleted immediately (no media backup needed).
 #[derive(Debug)]

@@ -8,9 +8,9 @@ use serenity::all::{ChannelId, GetMessages, Http, Timestamp};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-use crate::cancellation_registry::{CancellationRegistry, CancellationToken};
+use crate::cancellation::{CancellationRegistry, CancellationToken};
 use crate::cleanup::queue::{BackupJob, DeleteJob, classify_messages, filter_expired_messages};
-use crate::config_store::ConfigStore;
+use crate::config::ConfigStore;
 use crate::media::MediaDownloader;
 
 // Note: Discord requires messages to be < 14 days old for bulk delete

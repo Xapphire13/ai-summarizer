@@ -6,19 +6,16 @@ use serenity::{Client, all::GatewayIntents};
 use tracing::{error, info};
 
 use crate::{
-    cancellation_registry::CancellationRegistry,
+    cancellation::CancellationRegistry,
     command::{CommandData, cleanup},
-    config::Config,
-    config_store::ConfigStore,
+    config::{Config, ConfigStore},
     scheduler::spawn_scheduler,
 };
 
-mod cancellation_registry;
+mod cancellation;
 mod cleanup;
 mod command;
 mod config;
-mod config_store;
-mod extensions;
 mod media;
 mod scheduler;
 

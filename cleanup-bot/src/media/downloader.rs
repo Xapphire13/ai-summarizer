@@ -8,7 +8,7 @@ use serenity::all::MessageId;
 use tokio::{fs, io::AsyncWriteExt};
 use tracing::{debug, info};
 
-use crate::extensions::MediaAttachment;
+use crate::media::MediaAttachment;
 
 /// Downloads media attachments to the local filesystem.
 pub struct MediaDownloader {

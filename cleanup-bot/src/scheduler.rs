@@ -5,9 +5,9 @@ use serenity::all::Http;
 use tokio::time::{MissedTickBehavior, interval};
 use tracing::{debug, info};
 
-use crate::cancellation_registry::CancellationRegistry;
+use crate::cancellation::CancellationRegistry;
 use crate::cleanup::cleanup_channel;
-use crate::config_store::ConfigStore;
+use crate::config::ConfigStore;
 
 /// Spawn the cleanup scheduler task.
 pub fn spawn_scheduler(
