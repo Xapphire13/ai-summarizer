@@ -5,11 +5,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use chrono::Days;
 use serenity::all::{ChannelId, GetMessages, Http, Timestamp};
-use tokio::sync::watch;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-use crate::cancellation_registry::CancellationRegistry;
+use crate::cancellation_registry::{CancellationRegistry, CancellationToken};
 use crate::cleanup::queue::{BackupJob, DeleteJob, classify_messages, filter_expired_messages};
 use crate::config_store::ConfigStore;
 use crate::media::MediaDownloader;
@@ -32,9 +31,9 @@ pub async fn cleanup_channel(
     cancellation: Arc<Mutex<CancellationRegistry>>,
     channel_id: ChannelId,
     retention_days: NonZeroU32,
-    cancel_rx: watch::Receiver<bool>,
+    cancel_token: CancellationToken,
 ) {
-    let result = run_cleanup(http, config, channel_id, retention_days, cancel_rx).await;
+    let result = run_cleanup(http, config, channel_id, retention_days, cancel_token).await;
 
     // Deregister cancellation token
     cancellation.lock().unwrap().deregister(channel_id);
@@ -49,7 +48,7 @@ async fn run_cleanup(
     config: ConfigStore,
     channel_id: ChannelId,
     retention_days: NonZeroU32,
-    mut cancel_rx: watch::Receiver<bool>,
+    cancel_token: CancellationToken,
 ) -> Result<()> {
     use serenity::all::{Message, MessageId};
 
@@ -64,8 +63,7 @@ async fn run_cleanup(
 
     // Pagination loop
     for round in 0..MAX_PAGINATION_ROUNDS {
-        // Check cancellation
-        if *cancel_rx.borrow() {
+        if cancel_token.is_cancelled() {
             info!("Cleanup cancelled for channel {channel_id}");
             return Ok(());
         }
@@ -138,55 +136,52 @@ async fn run_cleanup(
         }
     }
 
-    // Clear pagination cursor if we reached the end of history
+    if expired_messages.is_empty() {
+        info!("No expired messages in channel {channel_id}");
+    } else {
+        info!(
+            "Found {} expired messages in channel {channel_id}",
+            expired_messages.len()
+        );
+
+        // Classify into delete vs backup jobs
+        let classified = classify_messages(expired_messages);
+        info!(
+            "Classified: {} delete jobs, {} backup jobs",
+            classified.delete_jobs.len(),
+            classified.backup_jobs.len()
+        );
+
+        if cancel_token.is_cancelled() {
+            info!("Cleanup cancelled for channel {channel_id}");
+            return Ok(());
+        }
+
+        // Process delete jobs (non-media messages)
+        if !classified.delete_jobs.is_empty() {
+            delete_messages(&http, channel_id, &classified.delete_jobs, &cancel_token).await?;
+        }
+
+        if cancel_token.is_cancelled() {
+            info!("Cleanup cancelled for channel {channel_id}");
+            return Ok(());
+        }
+
+        // Process backup jobs (media messages)
+        if !classified.backup_jobs.is_empty() {
+            let download_dir = config.media_backup_config().download_dir;
+
+            process_backup_jobs(&http, download_dir, &classified.backup_jobs, &cancel_token)
+                .await?;
+        }
+    }
+
     if reached_end {
         debug!("Reached end of channel history, clearing pagination cursor");
         config.set_pagination_cursor(channel_id, None)?;
     } else {
         debug!("Saving pagination cursor: {:?}", cursor);
         config.set_pagination_cursor(channel_id, cursor.map(|c| c.get()))?;
-    }
-
-    if expired_messages.is_empty() {
-        info!("No expired messages in channel {channel_id}");
-        return Ok(());
-    }
-
-    info!(
-        "Found {} expired messages in channel {channel_id}",
-        expired_messages.len()
-    );
-
-    // Classify into delete vs backup jobs
-    let classified = classify_messages(expired_messages);
-    info!(
-        "Classified: {} delete jobs, {} backup jobs",
-        classified.delete_jobs.len(),
-        classified.backup_jobs.len()
-    );
-
-    // Check cancellation
-    if *cancel_rx.borrow() {
-        info!("Cleanup cancelled for channel {channel_id}");
-        return Ok(());
-    }
-
-    // Process delete jobs (non-media messages)
-    if !classified.delete_jobs.is_empty() {
-        delete_messages(&http, channel_id, &classified.delete_jobs, &mut cancel_rx).await?;
-    }
-
-    // Check cancellation again
-    if *cancel_rx.borrow() {
-        info!("Cleanup cancelled for channel {channel_id}");
-        return Ok(());
-    }
-
-    // Process backup jobs (media messages)
-    if !classified.backup_jobs.is_empty() {
-        let download_dir = config.media_backup_config().download_dir;
-
-        process_backup_jobs(&http, download_dir, &classified.backup_jobs, &mut cancel_rx).await?;
     }
 
     info!("Cleanup completed for channel {channel_id}");
@@ -199,7 +194,7 @@ async fn delete_messages(
     http: &Http,
     channel_id: ChannelId,
     jobs: &[DeleteJob],
-    cancel_rx: &mut watch::Receiver<bool>,
+    cancel_token: &CancellationToken,
 ) -> Result<()> {
     let bulk_delete_cutoff: Timestamp = Timestamp::now()
         .checked_sub_days(BULK_DELETE_THRESHOLD)
@@ -217,7 +212,7 @@ async fn delete_messages(
         let chunks: Vec<_> = bulk_jobs.chunks(BULK_DELETE_MAX).collect();
 
         for chunk in chunks {
-            if *cancel_rx.borrow() {
+            if cancel_token.is_cancelled() {
                 return Ok(());
             }
 
@@ -239,7 +234,7 @@ async fn delete_messages(
 
     if !individual_jobs.is_empty() {
         for job in jobs {
-            if *cancel_rx.borrow() {
+            if cancel_token.is_cancelled() {
                 return Ok(());
             }
 
@@ -262,12 +257,12 @@ async fn process_backup_jobs(
     _http: &Http,
     download_dir: std::path::PathBuf,
     jobs: &[BackupJob],
-    cancel_rx: &mut watch::Receiver<bool>,
+    cancel_token: &CancellationToken,
 ) -> Result<()> {
     let downloader = MediaDownloader::new(download_dir);
 
     for job in jobs {
-        if *cancel_rx.borrow() {
+        if cancel_token.is_cancelled() {
             return Ok(());
         }
 

@@ -57,7 +57,7 @@ async fn run_scheduler(
             let cancellation_registry = Arc::clone(&cancellation);
 
             // Check and register atomically to prevent race condition
-            let cancel_rx = {
+            let cancel_token = {
                 let mut registry = cancellation_registry.lock().unwrap();
                 if registry.is_running(channel_id) {
                     debug!(
@@ -81,7 +81,7 @@ async fn run_scheduler(
                     cancellation_registry,
                     channel_id,
                     retention_days,
-                    cancel_rx,
+                    cancel_token,
                 )
                 .await;
             });
