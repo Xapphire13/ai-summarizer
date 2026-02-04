@@ -39,7 +39,7 @@ pub struct BackupQueue {
 impl BackupQueue {
     /// Load the backup queue from disk, or create a new empty queue.
     pub fn load() -> Result<Self> {
-        if let Ok(content) = fs::read_to_string(&PENDING_BACKUPS_PATH) {
+        if let Ok(content) = fs::read_to_string(PENDING_BACKUPS_PATH) {
             let mut queue: BackupQueue = toml::from_str(&content)
                 .context(format!("Failed to parse {}", PENDING_BACKUPS_PATH))?;
 
