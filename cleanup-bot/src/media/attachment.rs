@@ -5,6 +5,7 @@ use serenity::all::Attachment;
 pub struct MediaAttachment {
     pub url: String,
     pub filename: String,
+    pub size: u64,
 }
 
 pub trait AttachmentsExt {
@@ -29,6 +30,7 @@ impl AttachmentsExt for Vec<Attachment> {
                     Some(MediaAttachment {
                         url: a.url.clone(),
                         filename: a.filename.clone(),
+                        size: a.size as u64,
                     })
                 } else {
                     None

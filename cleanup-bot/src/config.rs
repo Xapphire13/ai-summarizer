@@ -36,14 +36,49 @@ pub struct RetentionConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BackupWorkerConfig {
+    #[serde(default = "default_check_interval")]
+    pub check_interval_seconds: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+    #[serde(default = "default_base_retry_delay")]
+    pub base_retry_delay_seconds: u64,
+}
+
+fn default_check_interval() -> u64 {
+    60
+}
+
+fn default_max_retries() -> u32 {
+    5
+}
+
+fn default_base_retry_delay() -> u64 {
+    60
+}
+
+impl Default for BackupWorkerConfig {
+    fn default() -> Self {
+        Self {
+            check_interval_seconds: default_check_interval(),
+            max_retries: default_max_retries(),
+            base_retry_delay_seconds: default_base_retry_delay(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MediaBackupConfig {
     pub download_dir: PathBuf,
+    #[serde(default)]
+    pub worker: BackupWorkerConfig,
 }
 
 impl Default for MediaBackupConfig {
     fn default() -> Self {
         Self {
             download_dir: PathBuf::from("./media_backups"),
+            worker: BackupWorkerConfig::default(),
         }
     }
 }

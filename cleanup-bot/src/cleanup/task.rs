@@ -8,6 +8,7 @@ use serenity::all::{ChannelId, GetMessages, Http, Timestamp};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
+use crate::backup::{BackupQueue, BackupStatus, PendingBackup};
 use crate::cancellation::{CancellationRegistry, CancellationToken};
 use crate::cleanup::queue::{BackupJob, DeleteJob, classify_messages, filter_expired_messages};
 use crate::config::ConfigStore;
@@ -28,12 +29,21 @@ const MAX_PAGINATION_ROUNDS: usize = 10;
 pub async fn cleanup_channel(
     http: Arc<Http>,
     config: ConfigStore,
+    backup_queue: Arc<Mutex<BackupQueue>>,
     cancellation: Arc<Mutex<CancellationRegistry>>,
     channel_id: ChannelId,
     retention_days: NonZeroU32,
     cancel_token: CancellationToken,
 ) {
-    let result = run_cleanup(http, config, channel_id, retention_days, cancel_token).await;
+    let result = run_cleanup(
+        http,
+        config,
+        backup_queue,
+        channel_id,
+        retention_days,
+        cancel_token,
+    )
+    .await;
 
     // Deregister cancellation token
     cancellation.lock().unwrap().deregister(channel_id);
@@ -46,6 +56,7 @@ pub async fn cleanup_channel(
 async fn run_cleanup(
     http: Arc<Http>,
     config: ConfigStore,
+    backup_queue: Arc<Mutex<BackupQueue>>,
     channel_id: ChannelId,
     retention_days: NonZeroU32,
     cancel_token: CancellationToken,
@@ -171,8 +182,15 @@ async fn run_cleanup(
         if !classified.backup_jobs.is_empty() {
             let download_dir = config.media_backup_config().download_dir;
 
-            process_backup_jobs(&http, download_dir, &classified.backup_jobs, &cancel_token)
-                .await?;
+            process_backup_jobs(
+                &http,
+                channel_id,
+                download_dir,
+                &backup_queue,
+                &classified.backup_jobs,
+                &cancel_token,
+            )
+            .await?;
         }
     }
 
@@ -251,11 +269,12 @@ async fn delete_messages(
     Ok(())
 }
 
-/// Process backup jobs: download media locally, mark as pending backup.
-/// Messages with media are NOT deleted until OneDrive upload is implemented.
+/// Process backup jobs: download media locally, add to backup queue, then delete Discord message.
 async fn process_backup_jobs(
-    _http: &Http,
+    http: &Http,
+    channel_id: ChannelId,
     download_dir: std::path::PathBuf,
+    backup_queue: &Mutex<BackupQueue>,
     jobs: &[BackupJob],
     cancel_token: &CancellationToken,
 ) -> Result<()> {
@@ -272,7 +291,7 @@ async fn process_backup_jobs(
             job.attachments.len()
         );
 
-        match downloader
+        let results = match downloader
             .download_attachments(job.message_id, job.timestamp, &job.attachments)
             .await
         {
@@ -282,27 +301,55 @@ async fn process_backup_jobs(
                     results.len(),
                     job.message_id
                 );
-
-                // TODO: Track in pending_backups.toml for persistence
-                // TODO: When OneDrive upload is implemented:
-                //   1. Upload files to OneDrive
-                //   2. On success, delete the Discord message
-                //   3. Optionally delete local files after confirmed upload
-
-                // For now, we do NOT delete the message - it stays in Discord
-                // until OneDrive upload is working
-                warn!(
-                    "Message {} has media pending cloud backup - NOT deleting",
-                    job.message_id
-                );
+                results
             }
             Err(e) => {
                 error!(
                     "Failed to download media for message {}: {e:?}",
                     job.message_id
                 );
+                // Don't delete the message if download failed
+                continue;
+            }
+        };
+
+        {
+            let mut queue = backup_queue.lock().unwrap();
+            for result in &results {
+                let pending = PendingBackup {
+                    message_id: job.message_id.get(),
+                    channel_id: channel_id.get(),
+                    local_path: result.local_path.clone(),
+                    original_filename: result.filename.clone(),
+                    timestamp: job.timestamp,
+                    retry_count: 0,
+                    status: BackupStatus::Pending,
+                };
+                if let Err(e) = queue.add(pending) {
+                    error!(
+                        "Failed to add backup to queue for {}: {e:?}",
+                        result.local_path.display()
+                    );
+                    // Don't delete the message if we can't track it
+                    continue;
+                }
             }
         }
+
+        // NOW it's safe to delete Discord message
+        if let Err(e) = channel_id.delete_message(http, job.message_id).await {
+            error!(
+                "Failed to delete message {} after backup: {e:?}",
+                job.message_id
+            );
+            // Message stays in Discord, but files are queued for backup
+            // This is acceptable - the message might get re-processed next run
+        } else {
+            info!("Deleted message {} after successful backup", job.message_id);
+        }
+
+        // Rate limit between message deletions
+        sleep(SINGLE_DELETE_DELAY).await;
     }
 
     Ok(())

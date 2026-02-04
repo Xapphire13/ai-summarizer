@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use reqwest::Client;
@@ -18,7 +18,10 @@ pub struct MediaDownloader {
 
 /// Result of a successful download.
 #[derive(Debug, Clone)]
-pub struct DownloadResult;
+pub struct DownloadResult {
+    pub local_path: PathBuf,
+    pub filename: String,
+}
 
 impl MediaDownloader {
     pub fn new(base_dir: PathBuf) -> Self {
@@ -100,11 +103,25 @@ impl MediaDownloader {
 
         file.flush().await.context("Failed to flush file")?;
 
+        // Verify download size matches expected size
+        if bytes_written != attachment.size {
+            // Delete partial/corrupt file
+            let _ = fs::remove_file(&path).await;
+            bail!(
+                "Size mismatch for {}: expected {} bytes, got {bytes_written} bytes",
+                attachment.filename,
+                attachment.size,
+            );
+        }
+
         info!(
             "Downloaded {} ({bytes_written} bytes) to {path:?}",
             attachment.filename,
         );
 
-        Ok(DownloadResult)
+        Ok(DownloadResult {
+            local_path: path,
+            filename,
+        })
     }
 }

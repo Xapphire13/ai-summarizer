@@ -5,6 +5,7 @@ use serenity::all::Http;
 use tokio::time::{MissedTickBehavior, interval};
 use tracing::{debug, info};
 
+use crate::backup::BackupQueue;
 use crate::cancellation::CancellationRegistry;
 use crate::cleanup::cleanup_channel;
 use crate::config::ConfigStore;
@@ -13,16 +14,18 @@ use crate::config::ConfigStore;
 pub fn spawn_scheduler(
     http: Arc<Http>,
     config: ConfigStore,
+    backup_queue: Arc<Mutex<BackupQueue>>,
     cancellation: Arc<Mutex<CancellationRegistry>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        run_scheduler(http, config, cancellation).await;
+        run_scheduler(http, config, backup_queue, cancellation).await;
     })
 }
 
 async fn run_scheduler(
     http: Arc<Http>,
     config: ConfigStore,
+    backup_queue: Arc<Mutex<BackupQueue>>,
     cancellation: Arc<Mutex<CancellationRegistry>>,
 ) {
     let scheduler_interval = Duration::from_secs(config.schedule_interval_seconds().get() as u64);
@@ -54,6 +57,7 @@ async fn run_scheduler(
         for (channel_id, retention_days) in channels {
             let http = Arc::clone(&http);
             let config = config.clone();
+            let backup_queue = Arc::clone(&backup_queue);
             let cancellation_registry = Arc::clone(&cancellation);
 
             // Check and register atomically to prevent race condition
@@ -78,6 +82,7 @@ async fn run_scheduler(
                 cleanup_channel(
                     http,
                     config,
+                    backup_queue,
                     cancellation_registry,
                     channel_id,
                     retention_days,

@@ -6,12 +6,14 @@ use serenity::{Client, all::GatewayIntents};
 use tracing::{error, info};
 
 use crate::{
+    backup::BackupQueue,
     cancellation::CancellationRegistry,
     command::{CommandData, cleanup},
     config::{Config, ConfigStore},
     scheduler::spawn_scheduler,
 };
 
+mod backup;
 mod cancellation;
 mod cleanup;
 mod command;
@@ -23,7 +25,10 @@ mod scheduler;
 async fn main() -> Result<()> {
     shared::init_tracing!()?;
     let bot_config = shared::load_bot_config!()?;
-    let config_store = ConfigStore::new(Config::load()?);
+    let config = Config::load()?;
+    let backup_worker_config = config.media_backup.worker.clone();
+    let config_store = ConfigStore::new(config);
+    let backup_queue = Arc::new(Mutex::new(BackupQueue::load_default()?));
     let cancellation = Arc::new(Mutex::new(CancellationRegistry::new()));
     let intents = GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILD_MESSAGES;
 
@@ -46,10 +51,14 @@ async fn main() -> Result<()> {
                         register_in_guild(ctx, &framework.options().commands, guild_id.id).await?;
                     }
 
+                    // Spawn the backup worker
+                    backup::spawn_worker(Arc::clone(&backup_queue), backup_worker_config);
+
                     // Spawn the cleanup scheduler
                     spawn_scheduler(
                         Arc::clone(&http),
                         config_store.clone(),
+                        backup_queue,
                         Arc::clone(&cancellation),
                     );
 
