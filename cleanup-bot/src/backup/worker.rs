@@ -114,6 +114,11 @@ async fn run_worker(
                         );
                     } else {
                         debug!("Deleted local file {}", local_path.display());
+
+                        // remove_dir only removes empty directories — safe to call unconditionally
+                        if let Some(parent) = local_path.parent() {
+                            let _ = tokio::fs::remove_dir(parent).await;
+                        }
                     }
                 }
                 Err(e) => {
