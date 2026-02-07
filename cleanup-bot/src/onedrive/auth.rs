@@ -9,7 +9,7 @@ use tracing::{debug, info, warn};
 
 use super::OneDriveError;
 
-const TOKENS_PATH: &str = "./onedrive_tokens.json";
+const TOKENS_PATH: &str = "./onedrive_tokens.toml";
 const AUTH_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
 const SCOPES: &str = "Files.ReadWrite offline_access";
 
@@ -61,7 +61,7 @@ impl TokenStore {
         let path = Path::new(TOKENS_PATH);
 
         match fs::read_to_string(path) {
-            Ok(content) => match serde_json::from_str(&content) {
+            Ok(content) => match toml::from_str(&content) {
                 Ok(tokens) => Some(tokens),
                 Err(e) => {
                     warn!("Failed to parse tokens file: {e}");
@@ -80,7 +80,7 @@ impl TokenStore {
             return Ok(());
         };
 
-        let content = serde_json::to_string_pretty(tokens)
+        let content = toml::to_string_pretty(tokens)
             .map_err(|e| OneDriveError::TokenStorage(e.to_string()))?;
 
         fs::write(TOKENS_PATH, content)?;
