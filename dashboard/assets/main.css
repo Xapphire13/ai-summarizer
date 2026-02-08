@@ -1,0 +1,90 @@
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    background: #0a0a0a;
+    color: #c0c0c0;
+    font-family: "Share Tech Mono", monospace;
+    padding: 2rem;
+}
+a {
+    color: #00ff41;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+h1 {
+    color: #00ff41;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+}
+h2 {
+    color: #ffb000;
+    font-size: 1.1rem;
+    margin: 1.5rem 0 0.75rem;
+}
+.bot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+}
+.bot-card {
+    background: #111;
+    border: 1px solid #333;
+    padding: 1rem;
+}
+.bot-card:hover {
+    border-color: #00ff41;
+}
+.bot-name {
+    font-size: 1.1rem;
+    color: #fff;
+    margin-bottom: 0.5rem;
+}
+.status {
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+.online {
+    color: #00ff41;
+}
+.offline {
+    color: #ff3232;
+}
+.meta {
+    color: #666;
+    font-size: 0.75rem;
+}
+.chart-container {
+    margin: 1rem 0;
+    overflow-x: auto;
+}
+.chart-container svg {
+    max-width: 100%;
+    height: auto;
+}
+.back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    color: #666;
+}
+.back-link:hover {
+    color: #00ff41;
+}
+.empty {
+    color: #666;
+    font-style: italic;
+    padding: 2rem 0;
+}
+.nav {
+    margin-bottom: 1.5rem;
+    color: #666;
+    font-size: 0.85rem;
+}
