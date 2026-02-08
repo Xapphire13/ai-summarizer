@@ -1,40 +1,56 @@
+/* Fonts */
 @import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
 
+/* Theme color variables */
 :root {
     --foreground: #bf8fff;
     --background: #1b1b1b;
 }
 
+/* Global reset */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
+
+/* Base page styling */
 body {
     background: var(--background);
     color: var(--foreground);
     font-family: "Share Tech Mono", monospace;
     padding: 12px;
 }
+
+/* Link defaults */
 a {
     color: var(--foreground);
     text-decoration: none;
 }
+
 a:hover {
     text-decoration: underline;
 }
+
+/* Section headings */
 h2 {
     color: #ffb000;
     font-size: 1.1rem;
     margin: 1.5rem 0 0.75rem;
 }
+
+/* Breadcrumb nav container */
 .breadcrumbs {
     border-bottom: 2px solid var(--foreground);
 }
+
+/* Breadcrumb horizontal layout */
 .breadcrumbs-list {
     display: flex;
     list-style: none;
 }
+
+/* Individual breadcrumb item */
 .breadcrumb {
     border-top: 2px solid var(--foreground);
     border-left: 2px solid var(--foreground);
@@ -42,13 +58,19 @@ h2 {
     position: relative;
     overflow: hidden;
 }
+
+/* Breadcrumb link color inheritance */
 .breadcrumb > a {
     color: inherit;
 }
+
+/* Non-first breadcrumb spacing */
 .breadcrumb:not(:first-child) {
     border-left: none;
     padding-left: 15px;
 }
+
+/* Chevron separator between breadcrumbs */
 .breadcrumb:not(:first-child)::before {
     content: "";
     position: absolute;
@@ -59,6 +81,8 @@ h2 {
     height: 20px;
     border: 2px solid var(--foreground);
 }
+
+/* Chevron cutout on active crumb */
 .breadcrumb:last-child:not(:first-child)::before {
     content: "";
     position: absolute;
@@ -68,69 +92,92 @@ h2 {
     width: 22px;
     height: 22px;
     border: none;
+    background: var(--background);
 }
+
+/* Active (current page) breadcrumb highlight */
 .breadcrumb:last-child {
     color: var(--background);
     background: var(--foreground);
     border-right: 2px solid var(--foreground);
 }
-.breadcrumb:last-child:not(:first-child)::before {
-    background: var(--background);
-}
 
+/* Responsive grid layout for bot cards */
 .bot-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1rem;
 }
+
+/* Bot card container and hover state */
 .bot-card {
     background: #111;
     border: 1px solid #333;
     padding: 1rem;
 }
+
 .bot-card:hover {
     border-color: #00ff41;
 }
+
+/* Bot card title */
 .bot-name {
     font-size: 1.1rem;
     color: #fff;
     margin-bottom: 0.5rem;
 }
+
+/* Status text base style */
 .status {
     font-size: 0.85rem;
     margin-bottom: 0.25rem;
 }
+
+/* Status indicator colors */
 .online {
     color: #00ff41;
 }
+
 .offline {
     color: #ff3232;
 }
+
+/* Muted metadata text */
 .meta {
     color: #666;
     font-size: 0.75rem;
 }
+
+/* Chart wrapper with horizontal scroll */
 .chart-container {
     margin: 1rem 0;
     overflow-x: auto;
 }
+
 .chart-container svg {
     max-width: 100%;
     height: auto;
 }
+
+/* Back navigation link */
 .back-link {
     display: inline-block;
     margin-bottom: 1rem;
     color: #666;
 }
+
 .back-link:hover {
     color: var(--foreground);
 }
+
+/* Empty state placeholder */
 .empty {
     color: #666;
     font-style: italic;
     padding: 2rem 0;
 }
+
+/* Secondary navigation */
 .nav {
     margin-bottom: 1.5rem;
     color: #666;
