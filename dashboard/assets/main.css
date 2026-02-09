@@ -5,6 +5,8 @@
 :root {
     --foreground: #bf8fff;
     --background: #1b1b1b;
+    --status-online: #00ff41;
+    --status-offline: #ff3232;
 }
 
 /* Global reset */
@@ -30,13 +32,6 @@ a {
 
 a:hover {
     text-decoration: underline;
-}
-
-/* Section headings */
-h2 {
-    color: #ffb000;
-    font-size: 1.1rem;
-    margin: 1.5rem 0 0.75rem;
 }
 
 /* Breadcrumb nav container */
@@ -100,86 +95,4 @@ h2 {
     color: var(--background);
     background: var(--foreground);
     border-right: 2px solid var(--foreground);
-}
-
-/* Responsive grid layout for bot cards */
-.bot-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
-}
-
-/* Bot card container and hover state */
-.bot-card {
-    background: #111;
-    border: 1px solid #333;
-    padding: 1rem;
-}
-
-.bot-card:hover {
-    border-color: #00ff41;
-}
-
-/* Bot card title */
-.bot-name {
-    font-size: 1.1rem;
-    color: #fff;
-    margin-bottom: 0.5rem;
-}
-
-/* Status text base style */
-.status {
-    font-size: 0.85rem;
-    margin-bottom: 0.25rem;
-}
-
-/* Status indicator colors */
-.online {
-    color: #00ff41;
-}
-
-.offline {
-    color: #ff3232;
-}
-
-/* Muted metadata text */
-.meta {
-    color: #666;
-    font-size: 0.75rem;
-}
-
-/* Chart wrapper with horizontal scroll */
-.chart-container {
-    margin: 1rem 0;
-    overflow-x: auto;
-}
-
-.chart-container svg {
-    max-width: 100%;
-    height: auto;
-}
-
-/* Back navigation link */
-.back-link {
-    display: inline-block;
-    margin-bottom: 1rem;
-    color: #666;
-}
-
-.back-link:hover {
-    color: var(--foreground);
-}
-
-/* Empty state placeholder */
-.empty {
-    color: #666;
-    font-style: italic;
-    padding: 2rem 0;
-}
-
-/* Secondary navigation */
-.nav {
-    margin-bottom: 1.5rem;
-    color: #666;
-    font-size: 0.85rem;
 }
