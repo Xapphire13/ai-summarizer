@@ -19,7 +19,7 @@ pub fn append_line<T: Serialize>(dir: &Path, bot_name: &str, item: &T) -> io::Re
     fs::create_dir_all(dir)?;
     let path = bot_file_path(dir, bot_name);
     let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-    let json = serde_json::to_string(item).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let json = serde_json::to_string(item).map_err(io::Error::other)?;
     writeln!(file, "{json}")?;
     Ok(())
 }
@@ -40,7 +40,10 @@ pub fn load_lines<T: DeserializeOwned>(dir: &Path, bot_name: &str) -> io::Result
         }
         match serde_json::from_str(&line) {
             Ok(item) => items.push(item),
-            Err(e) => eprintln!("warning: skipping malformed line {i} in {}: {e}", path.display()),
+            Err(e) => eprintln!(
+                "warning: skipping malformed line {i} in {}: {e}",
+                path.display()
+            ),
         }
     }
     Ok(items)
@@ -57,8 +60,7 @@ pub fn rewrite_lines<'a, T: Serialize + 'a>(
     {
         let mut file = File::create(&tmp_path)?;
         for item in items {
-            let json =
-                serde_json::to_string(item).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            let json = serde_json::to_string(item).map_err(io::Error::other)?;
             writeln!(file, "{json}")?;
         }
     }
@@ -85,10 +87,10 @@ pub fn discover_bots(dir: &Path) -> io::Result<Vec<String>> {
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                names.push(stem.to_owned());
-            }
+        if path.extension().and_then(|e| e.to_str()) == Some("jsonl")
+            && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+        {
+            names.push(stem.to_owned());
         }
     }
     Ok(names)
