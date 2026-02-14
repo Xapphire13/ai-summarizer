@@ -11,3 +11,7 @@ serde = "1.0.228"
 serde_json = "1.0.149"
 shared = { version = "0.1.0", path = "../shared" }
 tokio = { version = "1", features = ["time"] }
+turf = "0.10.1"
+
+[package.metadata.turf.class_names]
+template = "<original_name>_<style_sheet_hash_short>"

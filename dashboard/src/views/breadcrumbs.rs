@@ -1,5 +1,7 @@
 use maud::{Markup, html};
 
+use crate::views::ClassName;
+
 pub struct Breadcrumb<'a> {
     pub label: &'a str,
     pub href: Option<&'a str>,
@@ -7,10 +9,10 @@ pub struct Breadcrumb<'a> {
 
 pub fn breadcrumbs(items: &[Breadcrumb]) -> Markup {
     html! {
-        nav.breadcrumbs {
-            ol.breadcrumbs-list {
+        nav.(ClassName::BREADCRUMBS) {
+            ol.(ClassName::BREADCRUMBS_LIST) {
                 @for item in items {
-                    li.breadcrumb {
+                    li.(ClassName::BREADCRUMB) {
                         @if let Some(href) = item.href {
                             a href=(href) { (item.label) }
                         } @else {

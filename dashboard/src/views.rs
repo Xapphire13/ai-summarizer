@@ -10,7 +10,7 @@ use crate::{
 
 mod breadcrumbs;
 
-const STYLE: &str = include_str!("../assets/main.css");
+turf::style_sheet!("assets/main.css");
 
 fn page_shell(title: &str, content: Markup) -> Markup {
     html! {
@@ -20,7 +20,7 @@ fn page_shell(title: &str, content: Markup) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) }
-                style { (PreEscaped(STYLE)) }
+                style { (PreEscaped(STYLE_SHEET)) }
                 script
                     src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
                     integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
