@@ -50,8 +50,9 @@ impl MetricStore {
         event_id: String,
         value: Option<f64>,
         tags: HashMap<String, String>,
+        client_timestamp: Option<DateTime<Utc>>,
     ) -> DateTime<Utc> {
-        let timestamp = Utc::now();
+        let timestamp = client_timestamp.unwrap_or_else(Utc::now);
         let event = MetricEvent {
             event_id,
             value,
@@ -68,20 +69,6 @@ impl MetricStore {
         timestamp
     }
 
-    pub fn query<'a>(
-        &'a self,
-        bot_name: &str,
-        event_id_filter: Option<&str>,
-    ) -> Vec<&'a MetricEvent> {
-        let Some(events) = self.metrics.get(bot_name) else {
-            return Vec::new();
-        };
-        match event_id_filter {
-            Some(filter) => events.iter().filter(|e| e.event_id == filter).collect(),
-            None => events.iter().collect(),
-        }
-    }
-
     pub fn event_ids(&self, bot_name: &str) -> Vec<String> {
         let Some(events) = self.metrics.get(bot_name) else {
             return Vec::new();
@@ -94,6 +81,59 @@ impl MetricStore {
             .collect();
         ids.sort();
         ids
+    }
+
+    pub fn query_window(
+        &self,
+        bot_name: &str,
+        event_id: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        tag_filters: &HashMap<String, String>,
+    ) -> Vec<&MetricEvent> {
+        let Some(events) = self.metrics.get(bot_name) else {
+            return Vec::new();
+        };
+        events
+            .iter()
+            .filter(|e| {
+                e.event_id == event_id
+                    && e.timestamp >= start
+                    && e.timestamp <= end
+                    && tag_filters
+                        .iter()
+                        .all(|(k, v)| e.tags.get(k).is_some_and(|tv| tv == v))
+            })
+            .collect()
+    }
+
+    pub fn available_tags(&self, bot_name: &str, event_id: &str) -> HashMap<String, Vec<String>> {
+        let Some(events) = self.metrics.get(bot_name) else {
+            return HashMap::new();
+        };
+        let mut tag_values: HashMap<String, HashSet<String>> = HashMap::new();
+        for e in events.iter().filter(|e| e.event_id == event_id) {
+            for (k, v) in &e.tags {
+                tag_values.entry(k.clone()).or_default().insert(v.clone());
+            }
+        }
+        tag_values
+            .into_iter()
+            .map(|(k, vs)| {
+                let mut sorted: Vec<String> = vs.into_iter().collect();
+                sorted.sort();
+                (k, sorted)
+            })
+            .collect()
+    }
+
+    pub fn has_values(&self, bot_name: &str, event_id: &str) -> bool {
+        let Some(events) = self.metrics.get(bot_name) else {
+            return false;
+        };
+        events
+            .iter()
+            .any(|e| e.event_id == event_id && e.value.is_some())
     }
 
     pub fn prune(&mut self) {

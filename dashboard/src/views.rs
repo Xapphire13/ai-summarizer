@@ -12,6 +12,7 @@ use crate::views::breadcrumbs::{Breadcrumb, breadcrumbs};
 pub mod bot_detail;
 pub mod bot_list;
 mod breadcrumbs;
+pub mod chart_actions;
 
 fn page_shell(title: &str, content: Markup) -> Markup {
     html! {

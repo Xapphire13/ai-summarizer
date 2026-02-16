@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use chrono::{DateTime, Utc};
 use rocket::{State, post, serde::json::Json};
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +38,8 @@ pub struct MetricRequest {
     value: Option<f64>,
     #[serde(default)]
     tags: HashMap<String, String>,
+    #[serde(default)]
+    timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]
@@ -62,6 +65,7 @@ pub fn record_metric(
             data.event_id.clone(),
             data.value,
             data.tags.clone(),
+            data.timestamp,
         )
     };
 
