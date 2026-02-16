@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::state::DASHBOARDS_DIR;
+use crate::paths::DASHBOARDS_DIR;
+use crate::storage;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct DashboardConfig {
@@ -20,6 +22,10 @@ pub struct ChartConfig {
     pub tag_filters: HashMap<String, String>,
 }
 
+/// Chart visualization types.
+///
+/// `EventCountBar` and `SingleValue` work with any events (including valueless).
+/// `ValueSumBar` and `ValueAverageLine` require events that carry numeric values.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum ChartType {
     EventCountBar,
@@ -52,19 +58,27 @@ impl ChartType {
     }
 }
 
-pub fn load(bot_name: &str) -> DashboardConfig {
-    let path = Path::new(DASHBOARDS_DIR).join(format!("{bot_name}.toml"));
+/// Loads the dashboard config for a bot. Returns `DashboardConfig::default()` if
+/// the file doesn't exist; propagates other I/O and parse errors.
+pub fn load(bot_name: &str) -> io::Result<DashboardConfig> {
+    let safe_name = storage::sanitize_bot_name(bot_name);
+    let path = Path::new(DASHBOARDS_DIR).join(format!("{safe_name}.toml"));
     match fs::read_to_string(&path) {
-        Ok(content) => toml::from_str(&content).unwrap_or_default(),
-        Err(_) => DashboardConfig::default(),
+        Ok(content) => {
+            toml::from_str(&content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(DashboardConfig::default()),
+        Err(e) => Err(e),
     }
 }
 
-pub fn save(bot_name: &str, config: &DashboardConfig) {
+/// Persists a dashboard config to disk for the given bot.
+pub fn save(bot_name: &str, config: &DashboardConfig) -> io::Result<()> {
+    let safe_name = storage::sanitize_bot_name(bot_name);
     let dir = Path::new(DASHBOARDS_DIR);
-    let _ = fs::create_dir_all(dir);
-    let path = dir.join(format!("{bot_name}.toml"));
-    if let Ok(content) = toml::to_string_pretty(config) {
-        let _ = fs::write(&path, content);
-    }
+    fs::create_dir_all(dir)?;
+    let path = dir.join(format!("{safe_name}.toml"));
+    let content = toml::to_string_pretty(config)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(&path, content)
 }

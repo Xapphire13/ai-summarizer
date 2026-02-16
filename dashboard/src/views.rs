@@ -4,6 +4,7 @@ use axum::extract::State;
 use axum::http::header;
 use axum::response::IntoResponse;
 use maud::{Markup, html};
+use serde::Deserialize;
 
 use crate::state::AppState;
 use crate::views::breadcrumbs::{Breadcrumb, breadcrumbs};
@@ -12,6 +13,11 @@ pub mod bot_detail;
 pub mod bot_list;
 mod breadcrumbs;
 pub mod chart_actions;
+
+#[derive(Deserialize)]
+pub struct WindowQuery {
+    pub window: Option<String>,
+}
 
 fn page_shell(title: &str, content: Markup) -> Markup {
     html! {
@@ -31,18 +37,6 @@ fn page_shell(title: &str, content: Markup) -> Markup {
                 (content)
             }
         }
-    }
-}
-
-fn format_relative(seconds_ago: i64) -> String {
-    if seconds_ago < 60 {
-        format!("{seconds_ago}s ago")
-    } else if seconds_ago < 3600 {
-        format!("{}m ago", seconds_ago / 60)
-    } else if seconds_ago < 86400 {
-        format!("{}h ago", seconds_ago / 3600)
-    } else {
-        format!("{}d ago", seconds_ago / 86400)
     }
 }
 

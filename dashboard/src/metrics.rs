@@ -83,6 +83,10 @@ impl MetricStore {
         ids
     }
 
+    /// Returns events matching the given bot, event ID, time range, and tag filters.
+    ///
+    /// Tag filters use AND semantics: an event must match *every* key-value pair
+    /// in `tag_filters` to be included. An empty filter map matches all events.
     pub fn query_window(
         &self,
         bot_name: &str,
@@ -138,9 +142,15 @@ impl MetricStore {
 
     pub fn prune(&mut self) {
         let cutoff = Utc::now() - self.retention;
-        for events in self.metrics.values_mut() {
+        let mut dirty = Vec::new();
+
+        for (name, events) in self.metrics.iter_mut() {
+            let before = events.len();
             while events.front().is_some_and(|e| e.timestamp < cutoff) {
                 events.pop_front();
+            }
+            if events.len() != before {
+                dirty.push(name.clone());
             }
         }
 
@@ -157,7 +167,10 @@ impl MetricStore {
             }
         }
 
-        for (name, events) in &self.metrics {
+        for name in &dirty {
+            let Some(events) = self.metrics.get(name) else {
+                continue; // was in empty_bots
+            };
             if let Err(e) = storage::rewrite_lines(&self.data_dir, name, events.iter()) {
                 eprintln!("warning: failed to rewrite metrics for {name}: {e}");
             }

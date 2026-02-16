@@ -5,7 +5,8 @@ use axum::extract::State;
 use chrono::{DateTime, Utc};
 use maud::{Markup, PreEscaped, html};
 
-use crate::state::{AppState, ONLINE_GRACE_PERIOD};
+use crate::config::ONLINE_GRACE_PERIOD;
+use crate::state::AppState;
 use crate::styles::BotList as ClassName;
 
 fn uptime_blocks(history: &VecDeque<DateTime<Utc>>) -> [bool; 12] {

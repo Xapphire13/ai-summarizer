@@ -2,17 +2,18 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use maud::{Markup, html};
-use serde::Deserialize;
 
 use crate::charts::{self, svg};
-use crate::dashboard_config::{self, ChartType};
-use crate::state::{AppState, CHART_BUCKET_COUNT, MIN_BUCKET_SECONDS, ONLINE_GRACE_PERIOD};
+use crate::config::{CHART_BUCKET_COUNT, MIN_BUCKET_SECONDS, ONLINE_GRACE_PERIOD};
+use crate::dashboard_config::{self, ChartConfig, ChartType};
+use crate::state::AppState;
 use crate::styles::Charts as ChartClass;
 
+use super::WindowQuery;
 use super::breadcrumbs::{Breadcrumb, breadcrumbs};
-use super::{format_relative, page_shell};
+use super::page_shell;
 
 /// Available time windows for chart display: `(query_key, display_label, seconds)`.
 /// The largest window ("7d") matches the maximum metric retention period.
@@ -40,9 +41,16 @@ fn parse_window(window: Option<&str>) -> (i64, &str) {
     (86400, DEFAULT_WINDOW)
 }
 
-#[derive(Deserialize)]
-pub struct WindowQuery {
-    pub window: Option<String>,
+fn format_relative(seconds_ago: i64) -> String {
+    if seconds_ago < 60 {
+        format!("{seconds_ago}s ago")
+    } else if seconds_ago < 3600 {
+        format!("{}m ago", seconds_ago / 60)
+    } else if seconds_ago < 86400 {
+        format!("{}h ago", seconds_ago / 3600)
+    } else {
+        format!("{}d ago", seconds_ago / 86400)
+    }
 }
 
 pub async fn bot_detail(
@@ -94,145 +102,42 @@ pub fn render_charts(name: &str, window: Option<&str>, state: &Arc<AppState>) ->
     let start = now - chrono::Duration::seconds(window_secs);
     let end = now;
 
-    // Time window selector
-    let time_selector = html! {
-        div.(ChartClass::TIME_WINDOW_SELECTOR) {
-            @for &(key, label, _) in TIME_WINDOWS {
-                button
-                    .(ChartClass::TIME_WINDOW_BTN)
-                    .(if key == active_window { ChartClass::TIME_WINDOW_ACTIVE } else { "" })
-                    hx-get=(format!("/fragments/bot/{name}/charts?window={key}"))
-                    hx-target="#charts-container"
-                    hx-swap="innerHTML"
-                {
-                    (label)
-                }
-            }
+    let time_selector = render_time_selector(name, active_window);
+    let uptime_section = render_uptime_section(state, name, start, end);
+
+    let config = match dashboard_config::load(name) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("warning: failed to load dashboard config for {name}: {e}");
+            dashboard_config::DashboardConfig::default()
         }
     };
+    let metrics_guard = state.metrics.read().unwrap();
 
-    // Uptime chart
-    let registry = state.registry.read().unwrap();
-    let uptime_svg = if let Some(bot) = registry.get(name) {
-        svg::render_uptime_chart(&bot.heartbeat_history, start, end, CHART_BUCKET_COUNT)
-    } else {
-        svg::render_uptime_chart(
-            &std::collections::VecDeque::new(),
-            start,
-            end,
-            CHART_BUCKET_COUNT,
-        )
-    };
-    drop(registry);
-
-    // Metric charts from config
-    let config = dashboard_config::load(name);
-    let metrics = state.metrics.read().unwrap();
-
-    let mut chart_markup = Vec::new();
-    for (idx, chart_cfg) in config.charts.iter().enumerate() {
-        let events = metrics.query_window(
-            name,
-            &chart_cfg.event_id,
-            start,
-            end,
-            &chart_cfg.tag_filters,
-        );
-        let available_tags = metrics.available_tags(name, &chart_cfg.event_id);
-
-        let chart_html = match chart_cfg.chart_type {
-            ChartType::SingleValue => {
-                let total: f64 = match events.len() {
-                    0 => 0.0,
-                    _ => events.iter().filter_map(|e| e.value).sum::<f64>(),
-                };
-                let count = events.len();
-                let display = if metrics.has_values(name, &chart_cfg.event_id) {
-                    format!("{total}")
-                } else {
-                    format!("{count}")
-                };
-                html! {
-                    div.(ChartClass::SINGLE_VALUE_DISPLAY) {
-                        div.(ChartClass::SINGLE_VALUE_NUMBER) { (display) }
-                        div.(ChartClass::SINGLE_VALUE_LABEL) { (chart_cfg.event_id) }
-                    }
-                }
-            }
-            ref ct => {
-                let bucketed = charts::bucket_events(
-                    &events,
-                    start,
-                    end,
-                    CHART_BUCKET_COUNT,
-                    MIN_BUCKET_SECONDS,
-                );
-                let aggregated = match ct {
-                    ChartType::EventCountBar => charts::aggregate_count(&bucketed),
-                    ChartType::ValueSumBar => charts::aggregate_sum(&bucketed),
-                    ChartType::ValueAverageLine => charts::aggregate_average(&bucketed),
-                    ChartType::SingleValue => unreachable!(),
-                };
-                let label = format!("{} — {}", chart_cfg.event_id, ct.display_name());
-                match ct {
-                    ChartType::EventCountBar | ChartType::ValueSumBar => {
-                        svg::render_bar_chart(&aggregated, &label)
-                    }
-                    ChartType::ValueAverageLine => svg::render_line_chart(&aggregated, &label),
-                    ChartType::SingleValue => unreachable!(),
-                }
-            }
-        };
-
-        chart_markup.push(html! {
-            div.(ChartClass::CHART_CONTAINER) {
-                div.(ChartClass::CHART_HEADER) {
-                    span { (chart_cfg.event_id) " — " (chart_cfg.chart_type.display_name()) }
-                    button.(ChartClass::REMOVE_BTN)
-                        hx-delete=(format!("/bot/{name}/charts/{idx}"))
-                        hx-target="#charts-container"
-                        hx-swap="innerHTML"
-                        hx-confirm="Remove this chart?"
-                    { "[x]" }
-                }
-                // Tag filters
-                @if !available_tags.is_empty() {
-                    div.(ChartClass::TAG_FILTER) {
-                        @for (tag_key, tag_values) in &available_tags {
-                            @let current = chart_cfg.tag_filters.get(tag_key.as_str());
-                            label { (tag_key) ": " }
-                            @for v in tag_values {
-                                @let is_active = current.is_some_and(|cv| cv == v);
-                                @if is_active {
-                                    // Click to clear this filter
-                                    button.(ChartClass::TAG_FILTER_BTN).(ChartClass::TAG_FILTER_ACTIVE)
-                                        hx-get=(format!("/bot/{name}/charts/{idx}/filter?window={active_window}&tag_key={tag_key}&tag_value="))
-                                        hx-target="#charts-container"
-                                        hx-swap="innerHTML"
-                                    { (v) }
-                                } @else {
-                                    button.(ChartClass::TAG_FILTER_BTN)
-                                        hx-get=(format!("/bot/{name}/charts/{idx}/filter?window={active_window}&tag_key={tag_key}&tag_value={v}"))
-                                        hx-target="#charts-container"
-                                        hx-swap="innerHTML"
-                                    { (v) }
-                                }
-                            }
-                        }
-                    }
-                }
-                (chart_html)
-            }
-        });
-    }
-    drop(metrics);
+    let chart_markup: Vec<Markup> = config
+        .charts
+        .iter()
+        .enumerate()
+        .map(|(idx, chart_cfg)| {
+            render_metric_chart(
+                chart_cfg,
+                idx,
+                name,
+                active_window,
+                &metrics_guard,
+                start,
+                end,
+            )
+        })
+        .collect();
+    drop(metrics_guard);
 
     html! {
         (time_selector)
 
         h2 { "> uptime" }
         div.(ChartClass::CHART_CONTAINER) {
-            (uptime_svg)
+            (uptime_section)
         }
 
         @if !chart_markup.is_empty() {
@@ -250,6 +155,141 @@ pub fn render_charts(name: &str, window: Option<&str>, state: &Arc<AppState>) ->
             {
                 "[+ add chart]"
             }
+        }
+    }
+}
+
+fn render_time_selector(name: &str, active_window: &str) -> Markup {
+    html! {
+        div.(ChartClass::TIME_WINDOW_SELECTOR) {
+            @for &(key, label, _) in TIME_WINDOWS {
+                button
+                    .(ChartClass::TIME_WINDOW_BTN)
+                    .(if key == active_window { ChartClass::TIME_WINDOW_ACTIVE } else { "" })
+                    hx-get=(format!("/fragments/bot/{name}/charts?window={key}"))
+                    hx-target="#charts-container"
+                    hx-swap="innerHTML"
+                {
+                    (label)
+                }
+            }
+        }
+    }
+}
+
+fn render_uptime_section(
+    state: &AppState,
+    name: &str,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+) -> Markup {
+    let registry = state.registry.read().unwrap();
+    if let Some(bot) = registry.get(name) {
+        svg::render_uptime_chart(&bot.heartbeat_history, start, end, CHART_BUCKET_COUNT)
+    } else {
+        svg::render_uptime_chart(
+            &std::collections::VecDeque::new(),
+            start,
+            end,
+            CHART_BUCKET_COUNT,
+        )
+    }
+}
+
+fn render_metric_chart(
+    chart_cfg: &ChartConfig,
+    idx: usize,
+    name: &str,
+    active_window: &str,
+    metrics: &crate::metrics::MetricStore,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+) -> Markup {
+    let events = metrics.query_window(
+        name,
+        &chart_cfg.event_id,
+        start,
+        end,
+        &chart_cfg.tag_filters,
+    );
+    let available_tags = metrics.available_tags(name, &chart_cfg.event_id);
+
+    let chart_html = match chart_cfg.chart_type {
+        ChartType::SingleValue => {
+            let total: f64 = match events.len() {
+                0 => 0.0,
+                _ => events.iter().filter_map(|e| e.value).sum::<f64>(),
+            };
+            let count = events.len();
+            let display = if metrics.has_values(name, &chart_cfg.event_id) {
+                format!("{total}")
+            } else {
+                format!("{count}")
+            };
+            html! {
+                div.(ChartClass::SINGLE_VALUE_DISPLAY) {
+                    div.(ChartClass::SINGLE_VALUE_NUMBER) { (display) }
+                    div.(ChartClass::SINGLE_VALUE_LABEL) { (chart_cfg.event_id) }
+                }
+            }
+        }
+        ref ct => {
+            let bucketed =
+                charts::bucket_events(&events, start, end, CHART_BUCKET_COUNT, MIN_BUCKET_SECONDS);
+            let aggregated = match ct {
+                ChartType::EventCountBar => charts::aggregate_count(&bucketed),
+                ChartType::ValueSumBar => charts::aggregate_sum(&bucketed),
+                ChartType::ValueAverageLine => charts::aggregate_average(&bucketed),
+                ChartType::SingleValue => unreachable!(),
+            };
+            let label = format!("{} — {}", chart_cfg.event_id, ct.display_name());
+            match ct {
+                ChartType::EventCountBar | ChartType::ValueSumBar => {
+                    svg::render_bar_chart(&aggregated, &label)
+                }
+                ChartType::ValueAverageLine => svg::render_line_chart(&aggregated, &label),
+                ChartType::SingleValue => unreachable!(),
+            }
+        }
+    };
+
+    html! {
+        div.(ChartClass::CHART_CONTAINER) {
+            div.(ChartClass::CHART_HEADER) {
+                span { (chart_cfg.event_id) " — " (chart_cfg.chart_type.display_name()) }
+                button.(ChartClass::REMOVE_BTN)
+                    hx-delete=(format!("/bot/{name}/charts/{idx}"))
+                    hx-target="#charts-container"
+                    hx-swap="innerHTML"
+                    hx-confirm="Remove this chart?"
+                { "[x]" }
+            }
+            // Tag filters
+            @if !available_tags.is_empty() {
+                div.(ChartClass::TAG_FILTER) {
+                    @for (tag_key, tag_values) in &available_tags {
+                        @let current = chart_cfg.tag_filters.get(tag_key.as_str());
+                        label { (tag_key) ": " }
+                        @for v in tag_values {
+                            @let is_active = current.is_some_and(|cv| cv == v);
+                            @if is_active {
+                                button.(ChartClass::TAG_FILTER_BTN).(ChartClass::TAG_FILTER_ACTIVE)
+                                    hx-get=(format!("/bot/{name}/charts/{idx}/filter?window={active_window}&tag_key={tag_key}&tag_value="))
+                                    hx-target="#charts-container"
+                                    hx-swap="innerHTML"
+                                { (v) }
+                            } @else {
+                                button.(ChartClass::TAG_FILTER_BTN)
+                                    hx-get=(format!("/bot/{name}/charts/{idx}/filter?window={active_window}&tag_key={tag_key}&tag_value={v}"))
+                                    hx-target="#charts-container"
+                                    hx-swap="innerHTML"
+                                { (v) }
+                            }
+                        }
+                    }
+                }
+            }
+            (chart_html)
         }
     }
 }

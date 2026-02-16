@@ -75,6 +75,11 @@ impl BotRegistry {
         info
     }
 
+    /// Ensures a bot exists in the registry without recording a heartbeat.
+    ///
+    /// Used by the metrics endpoint so that bots sending only metrics (no
+    /// heartbeats) still appear in the bot list. Unlike `log_heartbeat`, this
+    /// does not append to heartbeat history or persist to disk.
     pub fn ensure_registered(&mut self, name: &str) -> &BotInfo {
         let now = Utc::now();
         self.bots.entry(name.to_owned()).or_insert_with(|| BotInfo {
@@ -114,15 +119,27 @@ impl BotRegistry {
             .is_some_and(|info| Utc::now() - info.last_heartbeat < grace_period)
     }
 
+    /// Removes heartbeat entries older than `retention` from every bot's history.
+    ///
+    /// Bots whose history becomes empty are removed from the registry and their
+    /// persisted `.jsonl` files are deleted. Surviving bots have their files
+    /// rewritten to reflect the trimmed history (only if entries were actually
+    /// removed).
     pub fn prune_heartbeat_history(&mut self, retention: Duration) {
         let cutoff = Utc::now() - retention;
-        for info in self.bots.values_mut() {
+        let mut dirty = Vec::new();
+
+        for (name, info) in self.bots.iter_mut() {
+            let before = info.heartbeat_history.len();
             while info
                 .heartbeat_history
                 .front()
                 .is_some_and(|ts| *ts < cutoff)
             {
                 info.heartbeat_history.pop_front();
+            }
+            if info.heartbeat_history.len() != before {
+                dirty.push(name.clone());
             }
         }
 
@@ -139,7 +156,10 @@ impl BotRegistry {
             }
         }
 
-        for (name, info) in &self.bots {
+        for name in &dirty {
+            let Some(info) = self.bots.get(name) else {
+                continue; // was in empty_bots
+            };
             let records: Vec<HeartbeatRecord> = info
                 .heartbeat_history
                 .iter()

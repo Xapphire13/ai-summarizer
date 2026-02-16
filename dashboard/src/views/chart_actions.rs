@@ -10,12 +10,8 @@ use crate::dashboard_config::{self, ChartConfig, ChartType};
 use crate::state::AppState;
 use crate::styles::Charts as ChartClass;
 
+use super::WindowQuery;
 use super::bot_detail;
-
-#[derive(Deserialize)]
-pub struct WindowQuery {
-    window: Option<String>,
-}
 
 #[derive(Deserialize)]
 pub struct AddChartTypesQuery {
@@ -120,13 +116,18 @@ pub async fn add_chart(
     State(state): State<Arc<AppState>>,
     Json(data): Json<AddChartRequest>,
 ) -> Result<Markup, StatusCode> {
-    let mut config = dashboard_config::load(&name);
+    let mut config = dashboard_config::load(&name).map_err(|e| {
+        eprintln!("warning: failed to load dashboard config for {name}: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     config.charts.push(ChartConfig {
         event_id: data.event_id.clone(),
         chart_type: data.chart_type.clone(),
         tag_filters: HashMap::new(),
     });
-    dashboard_config::save(&name, &config);
+    if let Err(e) = dashboard_config::save(&name, &config) {
+        eprintln!("warning: failed to save dashboard config for {name}: {e}");
+    }
     Ok(bot_detail::render_charts(
         &name,
         query.window.as_deref(),
@@ -139,10 +140,15 @@ pub async fn remove_chart(
     Query(query): Query<WindowQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Markup, StatusCode> {
-    let mut config = dashboard_config::load(&name);
+    let mut config = dashboard_config::load(&name).map_err(|e| {
+        eprintln!("warning: failed to load dashboard config for {name}: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     if index < config.charts.len() {
         config.charts.remove(index);
-        dashboard_config::save(&name, &config);
+        if let Err(e) = dashboard_config::save(&name, &config) {
+            eprintln!("warning: failed to save dashboard config for {name}: {e}");
+        }
     }
     Ok(bot_detail::render_charts(
         &name,
@@ -156,7 +162,10 @@ pub async fn update_chart_filter(
     Query(query): Query<FilterQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Markup, StatusCode> {
-    let mut config = dashboard_config::load(&name);
+    let mut config = dashboard_config::load(&name).map_err(|e| {
+        eprintln!("warning: failed to load dashboard config for {name}: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     if let Some(chart) = config.charts.get_mut(index) {
         if query.tag_value.is_empty() {
             chart.tag_filters.remove(&query.tag_key);
@@ -165,7 +174,9 @@ pub async fn update_chart_filter(
                 .tag_filters
                 .insert(query.tag_key.to_owned(), query.tag_value.to_owned());
         }
-        dashboard_config::save(&name, &config);
+        if let Err(e) = dashboard_config::save(&name, &config) {
+            eprintln!("warning: failed to save dashboard config for {name}: {e}");
+        }
     }
     Ok(bot_detail::render_charts(
         &name,
