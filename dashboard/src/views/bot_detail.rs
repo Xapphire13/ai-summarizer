@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use chrono::Utc;
 use maud::{Markup, html};
-use rocket::{State, get};
+use serde::Deserialize;
 
 use crate::charts::{self, svg};
 use crate::dashboard_config::{self, ChartType};
@@ -38,11 +40,18 @@ fn parse_window(window: Option<&str>) -> (i64, &str) {
     (86400, DEFAULT_WINDOW)
 }
 
-#[get("/bot/<name>")]
-pub fn bot_detail(name: &str, state: &State<Arc<AppState>>) -> Option<Markup> {
+#[derive(Deserialize)]
+pub struct WindowQuery {
+    pub window: Option<String>,
+}
+
+pub async fn bot_detail(
+    Path(name): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Markup, StatusCode> {
     let registry = state.registry.read().unwrap();
-    let bot = registry.get(name)?;
-    let online = registry.is_online(name, ONLINE_GRACE_PERIOD);
+    let bot = registry.get(&name).ok_or(StatusCode::NOT_FOUND)?;
+    let online = registry.is_online(&name, ONLINE_GRACE_PERIOD);
     let ago = (Utc::now() - bot.last_heartbeat).num_seconds();
     let bot_name = bot.name.clone();
     drop(registry);
@@ -50,7 +59,7 @@ pub fn bot_detail(name: &str, state: &State<Arc<AppState>>) -> Option<Markup> {
     let content = html! {
         (breadcrumbs(&[
             Breadcrumb { label: "bots", href: Some("/")},
-            Breadcrumb { label: name, href: None }])
+            Breadcrumb { label: &name, href: None }])
         )
 
         @if online {
@@ -65,22 +74,21 @@ pub fn bot_detail(name: &str, state: &State<Arc<AppState>>) -> Option<Markup> {
             hx-trigger="every 60s"
             hx-swap="innerHTML"
         {
-            (render_charts(name, None, state))
+            (render_charts(&name, None, &state))
         }
     };
-    Some(page_shell(&format!("{bot_name} | Dashboard"), content))
+    Ok(page_shell(&format!("{bot_name} | Dashboard"), content))
 }
 
-#[get("/fragments/bot/<name>/charts?<window>")]
-pub fn fragment_bot_charts(
-    name: &str,
-    window: Option<&str>,
-    state: &State<Arc<AppState>>,
-) -> Option<Markup> {
-    Some(render_charts(name, window, state))
+pub async fn fragment_bot_charts(
+    Path(name): Path<String>,
+    Query(query): Query<WindowQuery>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Markup, StatusCode> {
+    Ok(render_charts(&name, query.window.as_deref(), &state))
 }
 
-fn render_charts(name: &str, window: Option<&str>, state: &State<Arc<AppState>>) -> Markup {
+pub fn render_charts(name: &str, window: Option<&str>, state: &Arc<AppState>) -> Markup {
     let (window_secs, active_window) = parse_window(window);
     let now = Utc::now();
     let start = now - chrono::Duration::seconds(window_secs);
@@ -140,7 +148,7 @@ fn render_charts(name: &str, window: Option<&str>, state: &State<Arc<AppState>>)
                 };
                 let count = events.len();
                 let display = if metrics.has_values(name, &chart_cfg.event_id) {
-                    format!("{}", total)
+                    format!("{total}")
                 } else {
                     format!("{count}")
                 };

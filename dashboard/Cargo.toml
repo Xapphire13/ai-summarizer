@@ -5,12 +5,12 @@ edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
-maud = { version = "0.27.0", features = ["rocket"] }
-rocket = { version = "0.5.1", features = ["json"] }
-serde = "1.0.228"
+axum = { version = "0.8", features = ["json"] }
+maud = { version = "0.27.0", features = ["axum"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 shared = { version = "0.1.0", path = "../shared" }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1.49.0", features = ["time", "rt-multi-thread", "macros", "net"] }
 toml = "1.0.1"
 turf = "0.10.1"
 

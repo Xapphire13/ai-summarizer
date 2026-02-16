@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
+use axum::extract::State;
+use axum::http::header;
+use axum::response::IntoResponse;
 use maud::{Markup, html};
-use rocket::{
-    State, get,
-    http::{ContentType, Status},
-};
 
 use crate::state::AppState;
 use crate::views::breadcrumbs::{Breadcrumb, breadcrumbs};
@@ -47,13 +46,14 @@ fn format_relative(seconds_ago: i64) -> String {
     }
 }
 
-#[get("/styles.css")]
-pub fn styles() -> (Status, (ContentType, String)) {
-    (Status::Ok, (ContentType::CSS, crate::styles::ALL.clone()))
+pub async fn styles() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/css")],
+        crate::styles::ALL.clone(),
+    )
 }
 
-#[get("/")]
-pub fn index(state: &State<Arc<AppState>>) -> Markup {
+pub async fn index(State(state): State<Arc<AppState>>) -> Markup {
     let content = html! {
         (breadcrumbs(&[Breadcrumb { label: "bots", href: None}]))
         div
@@ -61,7 +61,7 @@ pub fn index(state: &State<Arc<AppState>>) -> Markup {
             hx-trigger="every 30s"
             hx-swap="innerHTML"
         {
-            (bot_list::bot_list_inner(state))
+            (bot_list::bot_list_inner(&state))
         }
     };
     page_shell("Dashboard | discord-bots", content)

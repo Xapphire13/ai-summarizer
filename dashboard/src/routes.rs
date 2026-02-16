@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
+use axum::extract::{Json, State};
+use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
-use rocket::{State, post, serde::json::Json};
 use serde::{Deserialize, Serialize};
 
 use crate::state::AppState;
@@ -17,10 +18,9 @@ pub struct HeartbeatResponse {
     last_heartbeat: String,
 }
 
-#[post("/heartbeat", format = "json", data = "<data>")]
-pub fn heartbeat(
-    data: Json<HeartbeatRequest>,
-    state: &State<Arc<AppState>>,
+pub async fn heartbeat(
+    State(state): State<Arc<AppState>>,
+    Json(data): Json<HeartbeatRequest>,
 ) -> Json<HeartbeatResponse> {
     let mut registry = state.registry.write().unwrap();
     let info = registry.log_heartbeat(&data.name);
@@ -48,11 +48,10 @@ pub struct MetricResponse {
     timestamp: String,
 }
 
-#[post("/metrics", format = "json", data = "<data>")]
-pub fn record_metric(
-    data: Json<MetricRequest>,
-    state: &State<Arc<AppState>>,
-) -> (rocket::http::Status, Json<MetricResponse>) {
+pub async fn record_metric(
+    State(state): State<Arc<AppState>>,
+    Json(data): Json<MetricRequest>,
+) -> (StatusCode, Json<MetricResponse>) {
     // Lock ordering: registry first, then metrics
     {
         let mut registry = state.registry.write().unwrap();
@@ -70,7 +69,7 @@ pub fn record_metric(
     };
 
     (
-        rocket::http::Status::Created,
+        StatusCode::CREATED,
         Json(MetricResponse {
             status: "recorded".to_owned(),
             timestamp: timestamp.to_rfc3339(),

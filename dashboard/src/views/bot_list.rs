@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use axum::extract::State;
 use chrono::{DateTime, Utc};
 use maud::{Markup, PreEscaped, html};
-use rocket::{State, get};
 
 use crate::state::{AppState, ONLINE_GRACE_PERIOD};
 use crate::styles::BotList as ClassName;
@@ -20,7 +20,7 @@ fn uptime_blocks(history: &VecDeque<DateTime<Utc>>) -> [bool; 12] {
     blocks
 }
 
-pub fn bot_list_inner(state: &State<Arc<AppState>>) -> Markup {
+pub fn bot_list_inner(state: &Arc<AppState>) -> Markup {
     let registry = state.registry.read().unwrap();
     let mut bots = registry.bots();
     bots.sort_by_key(|b| b.name.clone());
@@ -58,7 +58,6 @@ pub fn bot_list_inner(state: &State<Arc<AppState>>) -> Markup {
     }
 }
 
-#[get("/fragments/bot-list")]
-pub fn fragment_bot_list(state: &State<Arc<AppState>>) -> Markup {
-    bot_list_inner(state)
+pub async fn fragment_bot_list(State(state): State<Arc<AppState>>) -> Markup {
+    bot_list_inner(&state)
 }
